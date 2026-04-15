@@ -18,13 +18,12 @@ import pickle
 # If modifying these scopes, delete the token.pickle file
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
-# Event colors
 EVENT_COLORS = {
-    'Grassroots': '9',  # Blue
-    'Corporate': '10',  # Green
-    'Meetups': '5',     # Yellow
-    'Developer Days': '6',  # Orange
-    'Research': '11'    # Red
+    'Grassroots': '9',
+    'Corporate': '10',
+    'Meetups': '5',
+    'Developer Days': '6',
+    'Research': '11'
 }
 
 
@@ -35,29 +34,19 @@ def parse_date(date_str, year=2026):
 
     date_str = date_str.strip()
 
-    # Skip if only a month name (no day)
     if date_str.lower() in ['january', 'february', 'march', 'april', 'may', 'june',
                              'july', 'august', 'september', 'october', 'november', 'december']:
         return None
 
-    # Skip if contains "TBD" or "week"
     if 'TBD' in date_str or 'week' in date_str.lower():
         return None
 
-    # Common typo fixes
     date_str = date_str.replace('Arpil', 'April')
     date_str = date_str.replace('Novemeber', 'November')
-
-    # Replace en-dash with hyphen
     date_str = date_str.replace('–', '-')
-
-    # Remove ordinal suffixes from ranges (e.g., "10-11th" -> "10-11")
     date_str = re.sub(r'(\d+)-(\d+)(st|nd|rd|th)', r'\1-\2', date_str)
-
-    # Handle "Month Day - Day" (with spaces around hyphen)
     date_str = re.sub(r'(\d+)\s*-\s*(\d+)', r'\1-\2', date_str)
 
-    # Handle month ranges like "January 12-16" or "May 5-6"
     if '-' in date_str and not date_str.startswith('-'):
         parts = date_str.split()
         if len(parts) >= 2:
@@ -66,11 +55,8 @@ def parse_date(date_str, year=2026):
             if '-' in day_range:
                 try:
                     days = day_range.split('-')
-                    start_day = days[0].strip()
-                    end_day = days[1].strip()
-                    # Remove any remaining ordinal suffixes
-                    start_day = re.sub(r'(st|nd|rd|th)$', '', start_day)
-                    end_day = re.sub(r'(st|nd|rd|th)$', '', end_day)
+                    start_day = re.sub(r'(st|nd|rd|th)$', '', days[0].strip())
+                    end_day = re.sub(r'(st|nd|rd|th)$', '', days[1].strip())
 
                     start_date = datetime.strptime(f"{month_name} {start_day} {year}", "%B %d %Y")
                     end_date = datetime.strptime(f"{month_name} {end_day} {year}", "%B %d %Y")
@@ -78,9 +64,7 @@ def parse_date(date_str, year=2026):
                 except:
                     pass
 
-    # Handle single dates like "January 14" or "April 8"
     try:
-        # Remove ordinal suffixes
         clean_date = re.sub(r'(st|nd|rd|th)\s*$', '', date_str)
         date = datetime.strptime(f"{clean_date} {year}", "%B %d %Y")
         return (date, date)
@@ -95,12 +79,10 @@ def get_calendar_service():
     creds = None
     token_path = 'token.pickle'
 
-    # Load existing credentials
     if os.path.exists(token_path):
         with open(token_path, 'rb') as token:
             creds = pickle.load(token)
 
-    # If no valid credentials, login
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -110,11 +92,9 @@ def get_calendar_service():
                 print("Please download OAuth credentials from Google Cloud Console")
                 return None
 
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
 
-        # Save credentials for next run
         with open(token_path, 'wb') as token:
             pickle.dump(creds, token)
 
@@ -129,11 +109,9 @@ def clean_event_data(csv_path):
         reader = csv.DictReader(f)
 
         for row in reader:
-            # Skip header rows and empty rows
             if not row.get('Event Name') or row['Event Name'].strip() in ['', 'Q1', 'Q2', 'Q3', 'Q4']:
                 continue
 
-            # Extract relevant fields
             complete = row.get('Complete', '').upper() == 'TRUE'
             event_type = row.get('Type', '')
             event_name = row.get('Event Name', '').strip()
@@ -144,19 +122,15 @@ def clean_event_data(csv_path):
             description = row.get('Description', '').strip()
             activities = row.get('Activities', '').strip()
 
-            # Skip if no event name
             if not event_name:
                 continue
 
-            # Parse dates
             dates = parse_date(date_str)
             if not dates:
                 print(f"Warning: Could not parse date '{date_str}' for event '{event_name}'")
                 continue
 
             start_date, end_date = dates
-
-            # Build location string
             location_parts = [p for p in [city, country] if p]
             location = ', '.join(location_parts) if location_parts else ''
 
@@ -176,8 +150,7 @@ def clean_event_data(csv_path):
 
 
 def find_existing_event(service, calendar_id, event_name, start_date):
-    """Find an existing event with the same name and date"""
-    # Search for events around the start date (±7 days)
+    """Find an existing event with the same name and date (±7 days)"""
     time_min = (start_date - timedelta(days=7)).isoformat() + 'Z'
     time_max = (start_date + timedelta(days=7)).isoformat() + 'Z'
 
@@ -192,7 +165,6 @@ def find_existing_event(service, calendar_id, event_name, start_date):
 
         events = events_result.get('items', [])
 
-        # Check if any event matches exactly
         for event in events:
             if event.get('summary', '') == event_name:
                 return event
@@ -205,7 +177,6 @@ def find_existing_event(service, calendar_id, event_name, start_date):
 
 def build_event_body(event_data):
     """Build the event body for Google Calendar"""
-    # Build event description
     description_parts = []
     if event_data['description']:
         description_parts.append(event_data['description'])
@@ -216,7 +187,6 @@ def build_event_body(event_data):
 
     description = '\n\n'.join(description_parts)
 
-    # Create event body
     event = {
         'summary': event_data['name'],
         'location': event_data['location'],
@@ -231,7 +201,6 @@ def build_event_body(event_data):
         },
     }
 
-    # Add color based on event type
     if event_data['type'] in EVENT_COLORS:
         event['colorId'] = EVENT_COLORS[event_data['type']]
 
@@ -318,23 +287,19 @@ def main():
     events = clean_event_data(csv_path)
     print(f"Found {len(events)} events")
 
-    # Filter to only incomplete events (not over yet)
     incomplete_events = [e for e in events if not e['complete']]
     print(f"Found {len(incomplete_events)} incomplete events to sync")
 
-    # Get calendar service
     print("\nAuthenticating with Google Calendar...")
     service = get_calendar_service()
     if not service:
         return
 
-    # Select calendar
     calendar_id = select_calendar(service)
     if not calendar_id:
         print("No calendar selected. Exiting.")
         return
 
-    # Sync events
     print("\nSyncing events to calendar...")
     created_count = 0
     updated_count = 0
@@ -344,11 +309,9 @@ def main():
         event_name = event_data['name']
         start_date = event_data['start_date']
 
-        # Check if event already exists
         existing_event = find_existing_event(service, calendar_id, event_name, start_date)
 
         if existing_event:
-            # Update the existing event
             updated_event = update_calendar_event(service, calendar_id, existing_event, event_data)
             if updated_event:
                 print(f"  [Updated] {event_name} ({start_date.strftime('%Y-%m-%d')})")
@@ -357,7 +320,6 @@ def main():
                 print(f"  [Failed to update] {event_name}")
                 failed_count += 1
         else:
-            # Create a new event
             created_event = create_calendar_event(service, calendar_id, event_data)
             if created_event:
                 print(f"  [Created] {event_name} ({start_date.strftime('%Y-%m-%d')})")
