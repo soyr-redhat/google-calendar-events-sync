@@ -90,8 +90,8 @@ The script will:
 ## Event Colors
 
 Events are color-coded by type:
-- Grassroots: Blue
-- Corporate: Green
+- Grassroots: Green
+- Corporate: Blue
 - Meetups: Yellow
 - Developer Days: Orange
 - Research: Red
