@@ -19,8 +19,8 @@ import pickle
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 EVENT_COLORS = {
-    'Grassroots': '9',
-    'Corporate': '10',
+    'Grassroots': '10',
+    'Corporate': '9',
     'Meetups': '5',
     'Developer Days': '6',
     'Research': '11'
