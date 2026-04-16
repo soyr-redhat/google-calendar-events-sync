@@ -84,8 +84,8 @@ def clean_event_data(csv_path):
             complete = row.get('Complete', '').upper() == 'TRUE'
             event_type = row.get('Type', '')
             event_name = row.get('Event Name', '').strip()
-            start_date = row.get('Start Date', '').strip()
-            end_date = row.get('End Date', '').strip()
+            start_dates = row.get('Start Date', '').strip()
+            end_dates = row.get('End Date', '').strip()
             city = row.get('City', '').strip()
             country = row.get('Country', '').strip()
             attendees = row.get('AI BU On-Site Staff', '').strip()
@@ -95,12 +95,12 @@ def clean_event_data(csv_path):
             if not event_name:
                 continue
 
-            event_start = parse_date(start_date)
-            if not dates:
-                print(f"Warning: Could not parse date '{date_str}' for event '{event_name}'")
+            start_date = parse_date(start_dates)
+            end_date = parse_date(end_dates)
+            if not start_dates:
+                print(f"Warning: Could not parse start date for event '{event_name}'")
                 continue
 
-            start_date, end_date = dates
             location_parts = [p for p in [city, country] if p]
             location = ', '.join(location_parts) if location_parts else ''
 
