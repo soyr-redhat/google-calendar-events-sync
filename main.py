@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Google Calendar Event Sync
-Syncs AI Developer Events from spreadsheet to Google Calendar
-"""
-
 import csv
 import os
 import re
@@ -28,7 +23,6 @@ EVENT_COLORS = {
 
 
 def parse_date(date_str, year=2026):
-    """Parse various date formats from the spreadsheet"""
     if not date_str or date_str.strip() in ['', 'TBD']:
         return None
 
@@ -41,41 +35,17 @@ def parse_date(date_str, year=2026):
     if 'TBD' in date_str or 'week' in date_str.lower():
         return None
 
-    date_str = date_str.replace('Arpil', 'April')
-    date_str = date_str.replace('Novemeber', 'November')
-    date_str = date_str.replace('–', '-')
-    date_str = re.sub(r'(\d+)-(\d+)(st|nd|rd|th)', r'\1-\2', date_str)
-    date_str = re.sub(r'(\d+)\s*-\s*(\d+)', r'\1-\2', date_str)
-
-    if '-' in date_str and not date_str.startswith('-'):
-        parts = date_str.split()
-        if len(parts) >= 2:
-            month_name = parts[0]
-            day_range = parts[1]
-            if '-' in day_range:
-                try:
-                    days = day_range.split('-')
-                    start_day = re.sub(r'(st|nd|rd|th)$', '', days[0].strip())
-                    end_day = re.sub(r'(st|nd|rd|th)$', '', days[1].strip())
-
-                    start_date = datetime.strptime(f"{month_name} {start_day} {year}", "%B %d %Y")
-                    end_date = datetime.strptime(f"{month_name} {end_day} {year}", "%B %d %Y")
-                    return (start_date, end_date)
-                except:
-                    pass
-
     try:
         clean_date = re.sub(r'(st|nd|rd|th)\s*$', '', date_str)
         date = datetime.strptime(f"{clean_date} {year}", "%B %d %Y")
         return (date, date)
-    except:
+    except Exception:
         pass
 
     return None
 
 
 def get_calendar_service():
-    """Get authenticated Google Calendar service"""
     creds = None
     token_path = 'token.pickle'
 
@@ -102,7 +72,6 @@ def get_calendar_service():
 
 
 def clean_event_data(csv_path):
-    """Extract and clean event data from CSV"""
     events = []
 
     with open(csv_path, 'r', encoding='utf-8') as f:
@@ -115,7 +84,8 @@ def clean_event_data(csv_path):
             complete = row.get('Complete', '').upper() == 'TRUE'
             event_type = row.get('Type', '')
             event_name = row.get('Event Name', '').strip()
-            date_str = row.get('Date', '')
+            start_date = row.get('Start Date', '').strip()
+            end_date = row.get('End Date', '').strip()
             city = row.get('City', '').strip()
             country = row.get('Country', '').strip()
             attendees = row.get('AI BU On-Site Staff', '').strip()
@@ -125,7 +95,7 @@ def clean_event_data(csv_path):
             if not event_name:
                 continue
 
-            dates = parse_date(date_str)
+            event_start = parse_date(start_date)
             if not dates:
                 print(f"Warning: Could not parse date '{date_str}' for event '{event_name}'")
                 continue
