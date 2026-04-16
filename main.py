@@ -125,7 +125,6 @@ def clean_event_data(csv_path):
 
 
 def find_existing_event(service, calendar_id, event_name, start_date):
-    """Find an existing event with the same name and date (±7 days)"""
     time_min = (start_date - timedelta(days=7)).isoformat() + 'Z'
     time_max = (start_date + timedelta(days=7)).isoformat() + 'Z'
 
@@ -151,7 +150,6 @@ def find_existing_event(service, calendar_id, event_name, start_date):
 
 
 def build_event_body(event_data):
-    """Build the event body for Google Calendar"""
     description_parts = []
     if event_data['description']:
         description_parts.append(event_data['description'])
@@ -183,7 +181,6 @@ def build_event_body(event_data):
 
 
 def create_calendar_event(service, calendar_id, event_data):
-    """Create a Google Calendar event"""
     event = build_event_body(event_data)
 
     try:
@@ -195,7 +192,6 @@ def create_calendar_event(service, calendar_id, event_data):
 
 
 def update_calendar_event(service, calendar_id, existing_event, event_data):
-    """Update an existing Google Calendar event"""
     event = build_event_body(event_data)
 
     try:
@@ -211,7 +207,6 @@ def update_calendar_event(service, calendar_id, existing_event, event_data):
 
 
 def list_calendars(service):
-    """List all available calendars"""
     try:
         calendar_list = service.calendarList().list().execute()
         return calendar_list.get('items', [])
@@ -221,7 +216,6 @@ def list_calendars(service):
 
 
 def select_calendar(service):
-    """Interactive calendar selection"""
     print("\nAvailable Calendars:")
     calendars = list_calendars(service)
 
@@ -251,7 +245,6 @@ def select_calendar(service):
 
 
 def main():
-    """Main function to sync events"""
     csv_path = Path.home() / 'Downloads' / 'AI BU Developer Marketing_Advocacy 2026 Events - Events.csv'
 
     if not csv_path.exists():
@@ -283,13 +276,14 @@ def main():
     for event_data in incomplete_events:
         event_name = event_data['name']
         start_date = event_data['start_date']
+        end_date = event_data['end_date']
 
         existing_event = find_existing_event(service, calendar_id, event_name, start_date)
 
         if existing_event:
             updated_event = update_calendar_event(service, calendar_id, existing_event, event_data)
             if updated_event:
-                print(f"  [Updated] {event_name} ({start_date.strftime('%Y-%m-%d')})")
+                print(f"  [Updated] {event_name} ({start_date.strftime('%Y-%m-%d')}) - ({end_date.strftime('%Y-%m-%d')})")
                 updated_count += 1
             else:
                 print(f"  [Failed to update] {event_name}")
@@ -297,7 +291,7 @@ def main():
         else:
             created_event = create_calendar_event(service, calendar_id, event_data)
             if created_event:
-                print(f"  [Created] {event_name} ({start_date.strftime('%Y-%m-%d')})")
+                print(f"  [Created] {event_name} ({start_date.strftime('%Y-%m-%d')}) - ({end_date.strftime('%Y-%m-%d')})")
                 created_count += 1
             else:
                 print(f"  [Failed to create] {event_name}")
