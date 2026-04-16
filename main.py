@@ -38,7 +38,7 @@ def parse_date(date_str, year=2026):
     try:
         clean_date = re.sub(r'(st|nd|rd|th)\s*$', '', date_str)
         date = datetime.strptime(f"{clean_date} {year}", "%B %d %Y")
-        return (date, date)
+        return date
     except Exception:
         pass
 
@@ -97,9 +97,14 @@ def clean_event_data(csv_path):
 
             start_date = parse_date(start_dates)
             end_date = parse_date(end_dates)
-            if not start_dates:
+
+            if not start_date:
                 print(f"Warning: Could not parse start date for event '{event_name}'")
                 continue
+
+            if not end_date:
+                print(f"Oops! End date not found, using start date for one day event")
+                end_date = start_date
 
             location_parts = [p for p in [city, country] if p]
             location = ', '.join(location_parts) if location_parts else ''
