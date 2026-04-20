@@ -1,5 +1,7 @@
 # Google Calendar Event Sync
 
+## This readme is here in the event that I'm not around to make the update for people and the cron stuff isnt working
+
 Syncs AI Developer Events from the spreadsheet to Google Calendar.
 
 ## Features
