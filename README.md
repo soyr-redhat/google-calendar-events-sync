@@ -50,7 +50,7 @@ pip install -r requirements.txt
 
 1. Open the [events spreadsheet](https://docs.google.com/spreadsheets/d/1hGQ9PMMuMe_IcYlerJsm65BhqvvntMpwUyShRKJ9OaM/edit#gid=1024066477)
 2. Go to the "Events" tab
-3. File → Download → CSV
+3. File > Download > CSV
 4. Save to `~/Downloads/AI BU Developer Marketing_Advocacy 2026 Events - Events.csv`
 
 ## Usage
