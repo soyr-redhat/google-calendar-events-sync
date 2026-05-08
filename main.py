@@ -255,12 +255,12 @@ def export_summary_to_file(created_count, updated_count, failed_count, cnt_event
     
     today = get_current_date()
     with open(log_path, 'a') as f:
-        f.write(f"\nSummary for {today}:")
-        f.write(f"Created: {created_count} new events")
-        f.write(f"Updated: {updated_count} present events")
-        f.write(f"Failed: {failed_count} total events")
-        f.write(f"Total: {cnt_events} events")
-        f.write("-" * 60)
+        f.write(f"\nSummary for {today}:\n")
+        f.write(f"Created: {created_count} new events\n")
+        f.write(f"Updated: {updated_count} present events\n")
+        f.write(f"Failed: {failed_count} total events\n")
+        f.write(f"Total: {cnt_events} events\n")
+        f.write(f"-" * 60 + "\n")
 
     return None
 
