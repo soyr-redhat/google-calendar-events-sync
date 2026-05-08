@@ -260,6 +260,7 @@ def export_summary_to_file(created_count, updated_count, failed_count, cnt_event
         f.write(f"Updated: {updated_count} present events")
         f.write(f"Failed: {failed_count} total events")
         f.write(f"Total: {cnt_events} events")
+        f.write("-" * 60)
 
     return None
 
