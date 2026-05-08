@@ -2,7 +2,7 @@
 import csv
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -244,6 +244,26 @@ def select_calendar(service):
             return None
 
 
+def get_current_date():
+    return date.today()
+
+
+def export_summary_to_file(created_count, updated_count, failed_count, cnt_events):
+    log_path = Path("OUTPUT_LOG.md")
+    if not log_path.exists():
+        log_path.touch()
+    
+    today = get_current_date()
+    with open(log_path, 'a') as f:
+        f.write(f"\nSummary for {today}:")
+        f.write(f"Created: {created_count} new events")
+        f.write(f"Updated: {updated_count} present events")
+        f.write(f"Failed: {failed_count} total events")
+        f.write(f"Total: {cnt_events} events")
+
+    return None
+
+
 def main():
     csv_path = Path.home() / 'Downloads' / 'AI BU Developer Marketing_Advocacy 2026 Events - Events.csv'
 
@@ -302,6 +322,9 @@ def main():
     print(f"   Updated: {updated_count}")
     print(f"   Failed:  {failed_count}")
     print(f"   Total:   {len(incomplete_events)}")
+
+    export_summary_to_file(created_count, updated_count, failed_count, len(incomplete_events))
+    print(f"\nExported Run to File!")
 
 
 if __name__ == '__main__':
