@@ -206,6 +206,39 @@ def update_calendar_event(service, calendar_id, existing_event, event_data):
         return None
 
 
+def delete_orphaned_events(service, calendar_id, synced_names, active_names):
+    today = datetime.utcnow().isoformat() + 'Z'
+    deleted_count = 0
+    page_token = None
+
+    while True:
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=today,
+            singleEvents=True,
+            pageToken=page_token
+        ).execute()
+
+        for event in events_result.get('items', []):
+            summary = event.get('summary', '')
+            if summary in synced_names and summary not in active_names:
+                try:
+                    service.events().delete(
+                        calendarId=calendar_id,
+                        eventId=event['id']
+                    ).execute()
+                    print(f"  [Deleted] {summary}")
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"  [Failed to delete] {summary}: {e}")
+
+        page_token = events_result.get('nextPageToken')
+        if not page_token:
+            break
+
+    return deleted_count
+
+
 def list_calendars(service):
     try:
         calendar_list = service.calendarList().list().execute()
@@ -248,19 +281,20 @@ def get_current_date():
     return date.today()
 
 
-def export_summary_to_file(created_count, updated_count, failed_count, cnt_events):
+def export_summary_to_file(created_count, updated_count, deleted_count, failed_count, cnt_events):
     log_path = Path("OUTPUT_LOG.md")
     if not log_path.exists():
         log_path.touch()
-    
+
     today = get_current_date()
     with open(log_path, 'a') as f:
         f.write(f"\nSummary for {today}:  \n")
         f.write(f"Created: {created_count} new events  \n")
         f.write(f"Updated: {updated_count} present events  \n")
+        f.write(f"Deleted: {deleted_count} orphaned events  \n")
         f.write(f"Failed: {failed_count} total events  \n")
         f.write(f"**Total: {cnt_events} events**  \n")
-        f.write(f"-" * 60 + "  \n")   
+        f.write(f"-" * 60 + "  \n")
 
     return None
 
@@ -288,6 +322,9 @@ def main():
     if not calendar_id:
         print("No calendar selected. Exiting.")
         return
+
+    synced_names = {e['name'] for e in events}
+    active_names = {e['name'] for e in incomplete_events}
 
     print("\nSyncing events to calendar...")
     created_count = 0
@@ -318,13 +355,17 @@ def main():
                 print(f"  [Failed to create] {event_name}")
                 failed_count += 1
 
+    print("\nCleaning up orphaned events...")
+    deleted_count = delete_orphaned_events(service, calendar_id, synced_names, active_names)
+
     print(f"\nSummary:")
     print(f"   Created: {created_count}")
     print(f"   Updated: {updated_count}")
+    print(f"   Deleted: {deleted_count}")
     print(f"   Failed:  {failed_count}")
     print(f"   Total:   {len(incomplete_events)}")
 
-    export_summary_to_file(created_count, updated_count, failed_count, len(incomplete_events))
+    export_summary_to_file(created_count, updated_count, deleted_count, failed_count, len(incomplete_events))
     print(f"\nExported Run to File!")
 
 
