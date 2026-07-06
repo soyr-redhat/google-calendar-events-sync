@@ -206,7 +206,7 @@ def update_calendar_event(service, calendar_id, existing_event, event_data):
         return None
 
 
-def delete_orphaned_events(service, calendar_id, synced_names, active_names):
+def delete_orphaned_events(service, calendar_id, active_names):
     today = datetime.utcnow().isoformat() + 'Z'
     deleted_count = 0
     page_token = None
@@ -221,7 +221,7 @@ def delete_orphaned_events(service, calendar_id, synced_names, active_names):
 
         for event in events_result.get('items', []):
             summary = event.get('summary', '')
-            if summary in synced_names and summary not in active_names:
+            if summary and summary not in active_names:
                 try:
                     service.events().delete(
                         calendarId=calendar_id,
@@ -323,7 +323,6 @@ def main():
         print("No calendar selected. Exiting.")
         return
 
-    synced_names = {e['name'] for e in events}
     active_names = {e['name'] for e in incomplete_events}
 
     print("\nSyncing events to calendar...")
@@ -356,7 +355,7 @@ def main():
                 failed_count += 1
 
     print("\nCleaning up orphaned events...")
-    deleted_count = delete_orphaned_events(service, calendar_id, synced_names, active_names)
+    deleted_count = delete_orphaned_events(service, calendar_id, active_names)
 
     print(f"\nSummary:")
     print(f"   Created: {created_count}")
