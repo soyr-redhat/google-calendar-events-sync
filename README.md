@@ -86,7 +86,7 @@ The script will:
 - **Dates**: Start and end dates
 - **Location**: City, Country
 - **Attendees**: Who from RH is going
-- **Activities**: Talks, booths, workshops, etc.
+- **Activities**: Talks, booths, etc.
 - **Type**: Grassroots, Corporate, Meetups, Developer Days, Research
 
 ## Event Colors
