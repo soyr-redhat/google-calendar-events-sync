@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-import csv
+import json
 import os
 import re
-from datetime import datetime, timedelta, date
-from pathlib import Path
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+import sys
+from datetime import datetime, timedelta, timezone
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-import pickle
 
-# If modifying these scopes, delete the token.pickle file
-SCOPES = ['https://www.googleapis.com/auth/calendar']
+SHEET_SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 EVENT_COLORS = {
     'Grassroots': '10',
@@ -22,7 +21,10 @@ EVENT_COLORS = {
 }
 
 
-def parse_date(date_str, year=2026):
+def parse_date(date_str, year=None):
+    if year is None:
+        year = int(os.environ.get('EVENT_YEAR', datetime.now().year))
+
     if not date_str or date_str.strip() in ['', 'TBD']:
         return None
 
@@ -37,89 +39,120 @@ def parse_date(date_str, year=2026):
 
     try:
         clean_date = re.sub(r'(st|nd|rd|th)\s*$', '', date_str)
-        date = datetime.strptime(f"{clean_date} {year}", "%B %d %Y")
-        return date
+        dt = datetime.strptime(f"{clean_date} {year}", "%B %d %Y")
+        return dt
     except Exception:
         pass
 
     return None
 
 
-def get_calendar_service():
-    creds = None
-    token_path = 'token.pickle'
+def get_sheet_credentials():
+    sa_path = os.environ.get(
+        'GOOGLE_APPLICATION_CREDENTIALS',
+        '/etc/secrets/service-account.json'
+    )
+    if not os.path.exists(sa_path):
+        print(f"Error: Service account key not found at {sa_path}")
+        sys.exit(1)
 
-    if os.path.exists(token_path):
-        with open(token_path, 'rb') as token:
-            creds = pickle.load(token)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            if not os.path.exists('credentials.json'):
-                print("Error: credentials.json not found!")
-                print("Please download OAuth credentials from Google Cloud Console")
-                return None
-
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-
-        with open(token_path, 'wb') as token:
-            pickle.dump(creds, token)
-
-    return build('calendar', 'v3', credentials=creds)
+    return ServiceAccountCredentials.from_service_account_file(sa_path, scopes=SHEET_SCOPES)
 
 
-def clean_event_data(csv_path):
+def get_calendar_credentials():
+    token_path = os.environ.get('OAUTH_TOKEN_PATH', '/etc/secrets/oauth-token.json')
+    if not os.path.exists(token_path):
+        print(f"Error: OAuth token not found at {token_path}")
+        sys.exit(1)
+
+    with open(token_path) as f:
+        token_data = json.load(f)
+
+    creds = UserCredentials(
+        token=None,
+        refresh_token=token_data['refresh_token'],
+        client_id=token_data['client_id'],
+        client_secret=token_data['client_secret'],
+        token_uri='https://oauth2.googleapis.com/token',
+        scopes=CALENDAR_SCOPES,
+    )
+    creds.refresh(Request())
+    return creds
+
+
+def fetch_sheet_data(creds):
+    sheet_id = os.environ.get('GOOGLE_SHEET_ID', '1hGQ9PMMuMe_IcYlerJsm65BhqvvntMpwUyShRKJ9OaM')
+    sheet_name = os.environ.get('SHEET_NAME', 'Events')
+
+    service = build('sheets', 'v4', credentials=creds)
+    result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=sheet_name,
+    ).execute()
+
+    rows = result.get('values', [])
+    if not rows:
+        print("Error: No data found in spreadsheet")
+        return []
+
+    headers = rows[0]
+    data = []
+    for row in rows[1:]:
+        padded = row + [''] * (len(headers) - len(row))
+        data.append(dict(zip(headers, padded)))
+
+    return data
+
+
+def clean_event_data(rows, year=None):
+    if year is None:
+        year = int(os.environ.get('EVENT_YEAR', datetime.now().year))
+
     events = []
 
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
+    for row in rows:
+        if not row.get('Event Name') or row['Event Name'].strip() in ['', 'Q1', 'Q2', 'Q3', 'Q4']:
+            continue
 
-        for row in reader:
-            if not row.get('Event Name') or row['Event Name'].strip() in ['', 'Q1', 'Q2', 'Q3', 'Q4']:
-                continue
+        complete = row.get('Complete', '').upper() == 'TRUE'
+        event_type = row.get('Type', '')
+        event_name = row.get('Event Name', '').strip()
+        start_dates = row.get('Start Date', '').strip()
+        end_dates = row.get('End Date', '').strip()
+        city = row.get('City', '').strip()
+        country = row.get('Country', '').strip()
+        attendees = row.get('AI BU On-Site Staff', '').strip()
+        description = row.get('Description', '').strip()
+        activities = row.get('Activities', '').strip()
 
-            complete = row.get('Complete', '').upper() == 'TRUE'
-            event_type = row.get('Type', '')
-            event_name = row.get('Event Name', '').strip()
-            start_dates = row.get('Start Date', '').strip()
-            end_dates = row.get('End Date', '').strip()
-            city = row.get('City', '').strip()
-            country = row.get('Country', '').strip()
-            attendees = row.get('AI BU On-Site Staff', '').strip()
-            description = row.get('Description', '').strip()
-            activities = row.get('Activities', '').strip()
+        if not event_name:
+            continue
 
-            if not event_name:
-                continue
+        start_date = parse_date(start_dates, year)
+        end_date = parse_date(end_dates, year)
 
-            start_date = parse_date(start_dates)
-            end_date = parse_date(end_dates)
+        if not start_date:
+            print(f"Warning: Could not parse start date for event '{event_name}'")
+            continue
 
-            if not start_date:
-                print(f"Warning: Could not parse start date for event '{event_name}'")
-                continue
+        if not end_date:
+            print(f"Oops! End date not found, using start date for one day event")
+            end_date = start_date
 
-            if not end_date:
-                print(f"Oops! End date not found, using start date for one day event")
-                end_date = start_date
+        location_parts = [p for p in [city, country] if p]
+        location = ', '.join(location_parts) if location_parts else ''
 
-            location_parts = [p for p in [city, country] if p]
-            location = ', '.join(location_parts) if location_parts else ''
-
-            events.append({
-                'complete': complete,
-                'type': event_type,
-                'name': event_name,
-                'start_date': start_date,
-                'end_date': end_date,
-                'location': location,
-                'attendees': attendees,
-                'description': description,
-                'activities': activities
-            })
+        events.append({
+            'complete': complete,
+            'type': event_type,
+            'name': event_name,
+            'start_date': start_date,
+            'end_date': end_date,
+            'location': location,
+            'attendees': attendees,
+            'description': description,
+            'activities': activities
+        })
 
     return events
 
@@ -207,7 +240,7 @@ def update_calendar_event(service, calendar_id, existing_event, event_data):
 
 
 def delete_orphaned_events(service, calendar_id, active_names):
-    today = datetime.utcnow().isoformat() + 'Z'
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     deleted_count = 0
     page_token = None
 
@@ -239,89 +272,34 @@ def delete_orphaned_events(service, calendar_id, active_names):
     return deleted_count
 
 
-def list_calendars(service):
-    try:
-        calendar_list = service.calendarList().list().execute()
-        return calendar_list.get('items', [])
-    except Exception as e:
-        print(f"Error listing calendars: {e}")
-        return []
-
-
-def select_calendar(service):
-    print("\nAvailable Calendars:")
-    calendars = list_calendars(service)
-
-    if not calendars:
-        print("No calendars found!")
-        return None
-
-    for i, cal in enumerate(calendars, 1):
-        summary = cal.get('summary', 'Unnamed')
-        is_primary = ' (PRIMARY)' if cal.get('primary', False) else ''
-        print(f"  {i}. {summary}{is_primary}")
-
-    while True:
-        try:
-            choice = input(f"\nSelect calendar (1-{len(calendars)}): ").strip()
-            choice_num = int(choice)
-
-            if 1 <= choice_num <= len(calendars):
-                selected = calendars[choice_num - 1]
-                print(f"\nUsing calendar: {selected['summary']}")
-                return selected['id']
-            else:
-                print("Invalid choice. Try again.")
-        except (ValueError, KeyboardInterrupt):
-            print("\nCancelled.")
-            return None
-
-
-def get_current_date():
-    return date.today()
-
-
-def export_summary_to_file(created_count, updated_count, deleted_count, failed_count, cnt_events):
-    log_path = Path("OUTPUT_LOG.md")
-    if not log_path.exists():
-        log_path.touch()
-
-    today = get_current_date()
-    with open(log_path, 'a') as f:
-        f.write(f"\nSummary for {today}:  \n")
-        f.write(f"Created: {created_count} new events  \n")
-        f.write(f"Updated: {updated_count} present events  \n")
-        f.write(f"Deleted: {deleted_count} orphaned events  \n")
-        f.write(f"Failed: {failed_count} total events  \n")
-        f.write(f"**Total: {cnt_events} events**  \n")
-        f.write(f"-" * 60 + "  \n")
-
-    return None
-
-
 def main():
-    csv_path = Path.home() / 'Downloads' / 'AI BU Developer Marketing_Advocacy 2026 Events - Events.csv'
+    calendar_id = os.environ.get('CALENDAR_ID')
+    if not calendar_id:
+        print("Error: CALENDAR_ID environment variable is required")
+        sys.exit(1)
 
-    if not csv_path.exists():
-        print(f"Error: CSV file not found at {csv_path}")
+    year = int(os.environ.get('EVENT_YEAR', datetime.now().year))
+
+    print("Authenticating with service account for Sheets...")
+    sheet_creds = get_sheet_credentials()
+
+    print("Authenticating with OAuth for Calendar...")
+    cal_creds = get_calendar_credentials()
+
+    print("Fetching event data from Google Sheets...")
+    raw_rows = fetch_sheet_data(sheet_creds)
+    if not raw_rows:
+        print("No data to process. Exiting.")
         return
 
-    print("Reading and cleaning event data...")
-    events = clean_event_data(csv_path)
+    print("Cleaning event data...")
+    events = clean_event_data(raw_rows, year)
     print(f"Found {len(events)} events")
 
     incomplete_events = [e for e in events if not e['complete']]
     print(f"Found {len(incomplete_events)} incomplete events to sync")
 
-    print("\nAuthenticating with Google Calendar...")
-    service = get_calendar_service()
-    if not service:
-        return
-
-    calendar_id = select_calendar(service)
-    if not calendar_id:
-        print("No calendar selected. Exiting.")
-        return
+    cal_service = build('calendar', 'v3', credentials=cal_creds)
 
     active_names = {e['name'] for e in incomplete_events}
 
@@ -335,10 +313,10 @@ def main():
         start_date = event_data['start_date']
         end_date = event_data['end_date']
 
-        existing_event = find_existing_event(service, calendar_id, event_name, start_date)
+        existing_event = find_existing_event(cal_service, calendar_id, event_name, start_date)
 
         if existing_event:
-            updated_event = update_calendar_event(service, calendar_id, existing_event, event_data)
+            updated_event = update_calendar_event(cal_service, calendar_id, existing_event, event_data)
             if updated_event:
                 print(f"  [Updated] {event_name} ({start_date.strftime('%Y-%m-%d')}) - ({end_date.strftime('%Y-%m-%d')})")
                 updated_count += 1
@@ -346,7 +324,7 @@ def main():
                 print(f"  [Failed to update] {event_name}")
                 failed_count += 1
         else:
-            created_event = create_calendar_event(service, calendar_id, event_data)
+            created_event = create_calendar_event(cal_service, calendar_id, event_data)
             if created_event:
                 print(f"  [Created] {event_name} ({start_date.strftime('%Y-%m-%d')}) - ({end_date.strftime('%Y-%m-%d')})")
                 created_count += 1
@@ -355,7 +333,7 @@ def main():
                 failed_count += 1
 
     print("\nCleaning up orphaned events...")
-    deleted_count = delete_orphaned_events(service, calendar_id, active_names)
+    deleted_count = delete_orphaned_events(cal_service, calendar_id, active_names)
 
     print(f"\nSummary:")
     print(f"   Created: {created_count}")
@@ -364,8 +342,8 @@ def main():
     print(f"   Failed:  {failed_count}")
     print(f"   Total:   {len(incomplete_events)}")
 
-    export_summary_to_file(created_count, updated_count, deleted_count, failed_count, len(incomplete_events))
-    print(f"\nExported Run to File!")
+    if failed_count > 0:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

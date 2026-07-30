@@ -1,6 +1,8 @@
-# Google Calendar credentials and tokens
+# Google credentials
 credentials.json
 token.pickle
+service-account.json
+oauth-token.json
 
 # Python
 __pycache__/
@@ -21,3 +23,6 @@ ENV/
 
 # OS
 .DS_Store
+
+# Backup files
+*.save

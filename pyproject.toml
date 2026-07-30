@@ -1,10 +1,14 @@
 [project]
 name = "gcal-sync"
 version = "0.1.0"
-description = "Add your description here"
+description = "Syncs AI Developer Marketing events from Google Sheets to Google Calendar"
 requires-python = ">=3.12"
 dependencies = [
     "google-api-python-client>=2.194.0",
     "google-auth-httplib2>=0.3.1",
+]
+
+[project.optional-dependencies]
+setup = [
     "google-auth-oauthlib>=1.3.1",
 ]

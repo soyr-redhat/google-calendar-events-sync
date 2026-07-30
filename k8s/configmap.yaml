@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gcal-sync-config
+  namespace: daam-shared
+data:
+  CALENDAR_ID: "c_17e553859dd23f0f534416d1212ab886a4b87147f094b6793847cc0bdddbc20c@group.calendar.google.com"
+  GOOGLE_SHEET_ID: "1hGQ9PMMuMe_IcYlerJsm65BhqvvntMpwUyShRKJ9OaM"
+  SHEET_NAME: "Events"
+  EVENT_YEAR: "2026"
+  GOOGLE_APPLICATION_CREDENTIALS: "/etc/secrets/service-account.json"
+  OAUTH_TOKEN_PATH: "/etc/secrets/oauth/oauth-token.json"
