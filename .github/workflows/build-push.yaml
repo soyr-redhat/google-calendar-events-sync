@@ -3,6 +3,9 @@ name: Build and Push Container Image
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'OUTPUT_LOG.md'
+      - 'README.md'
 
 jobs:
   build-push:
