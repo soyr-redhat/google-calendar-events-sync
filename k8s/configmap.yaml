@@ -10,3 +10,4 @@ data:
   EVENT_YEAR: "2026"
   GOOGLE_APPLICATION_CREDENTIALS: "/etc/secrets/service-account.json"
   OAUTH_TOKEN_PATH: "/etc/secrets/oauth/oauth-token.json"
+  GITHUB_REPO: "soyr-redhat/google-calendar-events-sync"

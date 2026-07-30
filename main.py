@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
+import base64
 import json
 import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
+
+import requests
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
@@ -272,6 +275,51 @@ def delete_orphaned_events(service, calendar_id, active_names):
     return deleted_count
 
 
+def push_log_to_github(created, updated, deleted, failed, total):
+    token = os.environ.get('GITHUB_TOKEN')
+    if not token:
+        print("GITHUB_TOKEN not set, skipping log push")
+        return
+
+    repo = os.environ.get('GITHUB_REPO', 'soyr-redhat/google-calendar-events-sync')
+    api = f"https://api.github.com/repos/{repo}/contents/OUTPUT_LOG.md"
+    headers = {'Authorization': f'token {token}', 'Accept': 'application/vnd.github.v3+json'}
+
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    entry = (
+        f"\nSummary for {today}:  \n"
+        f"Created: {created} new events  \n"
+        f"Updated: {updated} present events  \n"
+        f"Deleted: {deleted} orphaned events  \n"
+        f"Failed: {failed} total events  \n"
+        f"**Total: {total} events**  \n"
+        f"{'-' * 60}  \n"
+    )
+
+    resp = requests.get(api, headers=headers)
+    if resp.status_code == 200:
+        data = resp.json()
+        existing = base64.b64decode(data['content']).decode('utf-8')
+        sha = data['sha']
+    else:
+        existing = "# Output Log\n"
+        sha = None
+
+    new_content = existing + entry
+    payload = {
+        'message': f'sync run {today}',
+        'content': base64.b64encode(new_content.encode('utf-8')).decode('utf-8'),
+    }
+    if sha:
+        payload['sha'] = sha
+
+    resp = requests.put(api, headers=headers, json=payload)
+    if resp.status_code in (200, 201):
+        print("Pushed run log to GitHub")
+    else:
+        print(f"Failed to push log to GitHub: {resp.status_code} {resp.text}")
+
+
 def main():
     calendar_id = os.environ.get('CALENDAR_ID')
     if not calendar_id:
@@ -341,6 +389,8 @@ def main():
     print(f"   Deleted: {deleted_count}")
     print(f"   Failed:  {failed_count}")
     print(f"   Total:   {len(incomplete_events)}")
+
+    push_log_to_github(created_count, updated_count, deleted_count, failed_count, len(incomplete_events))
 
     if failed_count > 0:
         sys.exit(1)

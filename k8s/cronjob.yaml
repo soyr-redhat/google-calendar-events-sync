@@ -17,6 +17,12 @@ spec:
             - name: gcal-sync
               image: quay.io/sawyer/gcal-sync:latest
               imagePullPolicy: Always
+              env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: gcal-sync-github-token
+                      key: token
               envFrom:
                 - configMapRef:
                     name: gcal-sync-config
